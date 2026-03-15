@@ -4,7 +4,7 @@ export const CORS_PROXIES = [
   'https://corsproxy.io/?',
   'https://api.allorigins.win/raw?url='
 ];
-export const CARD_BACK = '/card-back.svg';
+export const CARD_BACK = import.meta.env.BASE_URL + 'card-back.svg';
 
 export const PRESETS = [
   { name: 'Blue-Eyes', archetype: 'Blue-Eyes', desc: 'Classic powerhouse dragons' },

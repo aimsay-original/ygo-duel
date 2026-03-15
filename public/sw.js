@@ -1,12 +1,15 @@
 const CACHE_NAME = 'ygo-duel-v1';
 const CARD_CACHE = 'ygo-cards-v1';
 
+// Detect base path from SW scope (works with both / and /ygo-duel/)
+const BASE = self.registration ? new URL(self.registration.scope).pathname : '/';
+
 // App shell files to precache (updated on build)
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/card-back.svg',
-  '/manifest.json'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'card-back.svg',
+  BASE + 'manifest.json'
 ];
 
 // Install: precache app shell
@@ -66,7 +69,7 @@ self.addEventListener('fetch', (event) => {
             return response;
           }).catch(() => {
             // Return card back SVG as fallback
-            return caches.match('/card-back.svg');
+            return caches.match(BASE + 'card-back.svg');
           });
         });
       })
