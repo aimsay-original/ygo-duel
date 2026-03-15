@@ -329,8 +329,24 @@ export default function DuelField({ gameState }) {
     </div>;
   };
 
+  // ─── Dynamic field spell background ──────────────────
+  const activeFieldSpellBg = (() => {
+    const mine = gs.me.fieldSpell;
+    const opp = gs.opponent.fieldSpell;
+    if (mine && !mine.facedown) return mine;
+    if (opp && !opp.hidden && !opp.facedown) return opp;
+    return null;
+  })();
+  const fieldBgUrl = activeFieldSpellBg
+    ? (activeFieldSpellBg.card_images?.[0]?.image_url || cardImg(activeFieldSpellBg))
+    : null;
+  const duelBgStyle = fieldBgUrl ? {
+    backgroundImage: `linear-gradient(rgba(10,10,26,0.75), rgba(10,10,26,0.75)), url(${fieldBgUrl})`,
+    backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat'
+  } : {};
+
   return (
-    <div className="duel-screen">
+    <div className="duel-screen" style={duelBgStyle}>
       <div className="duel-topbar">
         <div className="duel-turn">T{gs.turn}</div>
         <div className="duel-phase-bar">
