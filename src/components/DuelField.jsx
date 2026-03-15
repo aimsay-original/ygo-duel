@@ -515,6 +515,7 @@ export default function DuelField({ gameState }) {
           <div className="menu-item" onClick={()=>{socketRef.current.emit('view-zone',{targetPlayer:gs.myIndex,zone:'extraDeck'});setShowMenu(false);}}>My Extra Deck</div>
           <div className="menu-item" onClick={()=>{socketRef.current.emit('view-zone',{targetPlayer:oppIndex,zone:'graveyard'});setShowMenu(false);}}>Opp's Graveyard</div>
           <div className="menu-item" onClick={()=>{socketRef.current.emit('view-zone',{targetPlayer:oppIndex,zone:'banished'});setShowMenu(false);}}>Opp's Banished</div>
+          <div className="menu-item" onClick={()=>{socketRef.current.emit('draw-card-request');setShowMenu(false);}}>Draw (Effect)</div>
           <div className="menu-item" onClick={()=>{socketRef.current.emit('create-token');setShowMenu(false);}}>Create Token</div>
           <div className="menu-item" onClick={()=>{socketRef.current.emit('sort-hand');setShowMenu(false);}}>Sort Hand</div>
           <div className="menu-item" onClick={()=>{socketRef.current.emit('view-top-card');setShowMenu(false);}}>View Top Card</div>

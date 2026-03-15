@@ -308,6 +308,15 @@ export class GameEngine {
   coinFlip(pi) { const r = Math.random() < 0.5 ? 'Heads' : 'Tails'; this.game.log.push(`${this.playerNames[pi]} flipped: ${r}!`); this._trimLog(); return r; }
   diceRoll(pi) { const r = Math.floor(Math.random() * 6) + 1; this.game.log.push(`${this.playerNames[pi]} rolled: ${r}!`); this._trimLog(); return r; }
   shuffleDeck(pi) { this.game.players[pi].deck = shuffleArray(this.game.players[pi].deck); this.game.log.push(`${this.playerNames[pi]} shuffled their deck.`); this._trimLog(); }
+  effectDraw(pi) {
+    const s = this.game.players[pi];
+    if (s.deck.length === 0) { s.lp = 0; this.game.log.push(`${this.playerNames[pi]} decked out!`); return { gameOver: { winner: 1 - pi, reason: 'deckout' } }; }
+    s.hand.push(s.deck.pop());
+    this.game.log.push(`${this.playerNames[pi]} drew a card (by effect).`);
+    this._trimLog();
+    return { ok: true };
+  }
+
   surrender(pi) { this.game.log.push(`${this.playerNames[pi]} surrendered!`); this._trimLog(); return { gameOver: { winner: 1 - pi, reason: 'surrender' } }; }
 
   sortHand(pi) {

@@ -266,7 +266,7 @@ export class OnlineHostAdapter extends NetworkAdapter {
         const isOnOppSide = data.targetPlayer !== undefined && data.targetPlayer !== pi;
         const targetZone = isOnOppSide ? `on your ${data.zone === 'monsters' ? 'Monster' : 'Spell/Trap'} Zone` : '';
 
-        this._pendingRequests.set(requestId, { requester: pi, data, card });
+        this._pendingRequests.set(requestId, { requester: pi, type: 'play-card', data, card });
 
         // Send confirmation to opponent
         const sendToOpp = pi === 0 ? (ev, d) => this._sendToGuest(ev, d) : (ev, d) => this._fire(ev, d);
@@ -290,6 +290,32 @@ export class OnlineHostAdapter extends NetworkAdapter {
         }, 30000);
         break;
       }
+      case 'draw-card-request': {
+        const requestId = ++this._requestIdCounter;
+        const deckCount = this.engine.game.players[pi].deck.length;
+        if (deckCount === 0) { sendError('Deck is empty!'); return; }
+
+        this._pendingRequests.set(requestId, { requester: pi, type: 'draw' });
+
+        const sendToOpp2 = pi === 0 ? (ev, d) => this._sendToGuest(ev, d) : (ev, d) => this._fire(ev, d);
+        sendToOpp2('confirm-request', {
+          requestId,
+          requesterName: this.engine.playerNames[pi],
+          card: null,
+          action: 'draw a card (by effect)',
+          targetZone: ''
+        });
+
+        sendPrivate('request-pending', { requestId });
+
+        setTimeout(() => {
+          if (this._pendingRequests.has(requestId)) {
+            this._pendingRequests.delete(requestId);
+            sendPrivate('request-result', { accepted: false, message: 'Request timed out.' });
+          }
+        }, 30000);
+        break;
+      }
       case 'confirm-response': {
         const pending = this._pendingRequests.get(data.requestId);
         if (!pending) return;
@@ -297,13 +323,25 @@ export class OnlineHostAdapter extends NetworkAdapter {
         const sendToRequester = pending.requester === 0 ? (ev, d) => this._fire(ev, d) : (ev, d) => this._sendToGuest(ev, d);
 
         if (data.accepted) {
-          // Execute the play
-          result = this.engine.playCard(pending.requester, pending.data);
-          if (result?.error) {
-            sendToRequester('request-result', { accepted: false, message: result.error });
+          if (pending.type === 'draw') {
+            // Execute effect draw
+            result = this.engine.effectDraw(pending.requester);
+            if (result?.error) {
+              sendToRequester('request-result', { accepted: false, message: result.error });
+            } else {
+              sendToRequester('request-result', { accepted: true, message: 'Drew a card by effect!' });
+              if (result?.gameOver) this._broadcast('game-over', result.gameOver);
+              this._broadcastState();
+            }
           } else {
-            sendToRequester('request-result', { accepted: true, message: `${pending.card.name} played!` });
-            this._broadcastState();
+            // Execute the play-card
+            result = this.engine.playCard(pending.requester, pending.data);
+            if (result?.error) {
+              sendToRequester('request-result', { accepted: false, message: result.error });
+            } else {
+              sendToRequester('request-result', { accepted: true, message: `${pending.card.name} played!` });
+              this._broadcastState();
+            }
           }
         } else {
           sendToRequester('request-result', { accepted: false, message: `${this.engine.playerNames[pi]} denied your request.` });
