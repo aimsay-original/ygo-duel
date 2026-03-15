@@ -1,6 +1,7 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
 import { GameEngine } from '../engine/GameEngine';
+import { PEER_CONFIG } from './peerConfig';
 
 export class OnlineHostAdapter extends NetworkAdapter {
   constructor(playerName) {
@@ -18,7 +19,7 @@ export class OnlineHostAdapter extends NetworkAdapter {
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     this.roomCode = code;
 
-    this.peer = new Peer('ygoduel-' + code, { debug: 0 });
+    this.peer = new Peer('ygoduel-' + code, PEER_CONFIG);
     this.peer.on('open', (id) => {
       this.peerId = id;
       this._fire('room-created', { roomId: code, fullPeerId: id, playerIndex: 0 });

@@ -564,3 +564,87 @@ html, body {
   100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); }
 }
 .summon-pulse { animation: summonPulse 0.4s ease-out; }
+
+/* ── Deck Builder: Success Message ── */
+.db-success-msg {
+  background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.3);
+  color: #4caf50; padding: 8px 12px; margin: 0 8px 8px;
+  border-radius: 8px; font-size: 13px; text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Deck Builder: Saved Decks in Quick Load ── */
+.preset-section-title {
+  padding: 10px 12px 4px; color: #ffd700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+  border-bottom: 1px solid rgba(255,215,0,0.15); margin-bottom: 4px;
+}
+.saved-deck-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; margin: 4px 8px; border-radius: 8px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; transition: background 0.2s;
+}
+.saved-deck-item:active { background: rgba(255,215,0,0.1); }
+.saved-deck-info { flex: 1; min-width: 0; }
+.saved-deck-info h4 {
+  margin: 0; color: #e0e0e0; font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.saved-deck-info p { margin: 2px 0 0; color: #888; font-size: 12px; }
+.saved-deck-actions { display: flex; gap: 6px; margin-left: 8px; flex-shrink: 0; }
+.saved-deck-btn {
+  border: none; border-radius: 6px; padding: 6px 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: inherit; min-height: 32px;
+}
+.saved-deck-btn.share {
+  background: rgba(0,188,212,0.15); color: #00bcd4;
+  border: 1px solid rgba(0,188,212,0.3);
+}
+.saved-deck-btn.share:active { background: rgba(0,188,212,0.3); }
+.saved-deck-btn.delete {
+  background: rgba(244,67,54,0.1); color: #f44336;
+  border: 1px solid rgba(244,67,54,0.2);
+  font-size: 16px; padding: 4px 8px; line-height: 1;
+}
+.saved-deck-btn.delete:active { background: rgba(244,67,54,0.25); }
+
+/* ── Deck Builder: Import Area ── */
+.import-deck-area {
+  display: flex; gap: 8px; padding: 8px 12px; align-items: center;
+}
+.import-input {
+  flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; color: #e0e0e0; padding: 8px 10px;
+  font-size: 13px; font-family: inherit; min-width: 0;
+}
+.import-input::placeholder { color: #555; }
+.import-input:focus { outline: none; border-color: rgba(255,215,0,0.4); }
+.import-btn { white-space: nowrap; padding: 8px 14px !important; font-size: 13px !important; }
+
+/* ── Deck Builder: Save Modal ── */
+.save-modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.save-modal {
+  background: #1e1e3a; border: 1px solid rgba(255,215,0,0.25);
+  border-radius: 14px; padding: 24px; width: 85%; max-width: 320px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+.save-modal h3 { margin: 0 0 4px; color: #ffd700; font-size: 18px; }
+.save-modal-info { margin: 0 0 14px; color: #888; font-size: 13px; }
+.save-modal-input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; color: #e0e0e0; padding: 10px 12px;
+  font-size: 15px; font-family: inherit; margin-bottom: 14px;
+}
+.save-modal-input::placeholder { color: #555; }
+.save-modal-input:focus { outline: none; border-color: rgba(255,215,0,0.5); }
+.save-modal-btns { display: flex; gap: 10px; }
+.save-modal-btns .db-btn { flex: 1; padding: 10px !important; font-size: 14px !important; }

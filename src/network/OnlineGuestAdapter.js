@@ -1,5 +1,6 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
+import { PEER_CONFIG } from './peerConfig';
 
 export class OnlineGuestAdapter extends NetworkAdapter {
   constructor(hostPeerId, playerName) {
@@ -12,7 +13,7 @@ export class OnlineGuestAdapter extends NetworkAdapter {
     this._reconnectTimer = null;
     this._destroyed = false;
 
-    this.peer = new Peer(null, { debug: 0 });
+    this.peer = new Peer(null, PEER_CONFIG);
     this.peer.on('open', () => this._connectToHost(false));
     this.peer.on('error', (err) => {
       console.error('Peer error:', err);
