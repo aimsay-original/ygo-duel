@@ -1,7 +1,7 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
 import { GameEngine } from '../engine/GameEngine';
-import { PEER_CONFIG } from './peerConfig';
+import { PEER_CONFIG, SIGNALING_TIMEOUT } from './peerConfig';
 
 export class OnlineHostAdapter extends NetworkAdapter {
   constructor(playerName) {
@@ -12,6 +12,8 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this.peerId = null;
     this.ready = false;
     this.roomCode = null;
+    this._signalingTimer = null;
+    this._destroyed = false;
 
     // Generate a short 6-char room code (no ambiguous chars)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -20,10 +22,22 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this.roomCode = code;
 
     this.peer = new Peer('ygoduel-' + code, PEER_CONFIG);
+
+    // Timeout: if signaling server doesn't respond within SIGNALING_TIMEOUT
+    this._signalingTimer = setTimeout(() => {
+      if (!this._destroyed && !this.peer.open) {
+        console.error('PeerJS signaling server timeout (host)');
+        this._fire('error-msg', 'Could not reach game server. Check your internet connection and try again.');
+        this.destroy();
+      }
+    }, SIGNALING_TIMEOUT);
+
     this.peer.on('open', (id) => {
+      clearTimeout(this._signalingTimer);
       this.peerId = id;
       this._fire('room-created', { roomId: code, fullPeerId: id, playerIndex: 0 });
     });
+
     this.peer.on('connection', (conn) => {
       // Accept reconnections — replace old connection
       if (this.conn) { try { this.conn.close(); } catch(e) {} }
@@ -34,7 +48,6 @@ export class OnlineHostAdapter extends NetworkAdapter {
       });
       conn.on('data', (msg) => {
         if (msg.event === 'reconnect') {
-          // Guest reconnected — update name and resend game state
           this.engine.playerNames[1] = msg.data.name;
           this._broadcastState();
           this._fire('room-update', { players: this.engine.playerNames, message: 'Opponent reconnected!' });
@@ -43,16 +56,39 @@ export class OnlineHostAdapter extends NetworkAdapter {
         }
         this._handleGuestMessage(msg);
       });
+      conn.on('error', (err) => {
+        console.error('Host data connection error:', err);
+      });
       conn.on('close', () => {
         this._fire('connection-status', { status: 'disconnected' });
       });
     });
+
     this.peer.on('error', (err) => {
+      clearTimeout(this._signalingTimer);
       console.error('Peer error:', err);
       if (err.type === 'unavailable-id') {
         this._fire('error-msg', 'Room code taken — please try again.');
+      } else if (err.type === 'network') {
+        this._fire('error-msg', 'Network error. Check your connection and try again.');
+      } else if (err.type === 'server-error') {
+        this._fire('error-msg', 'Game server is temporarily unavailable. Try again in a moment.');
       } else {
-        this._fire('error-msg', 'Connection error: ' + err.type);
+        this._fire('error-msg', 'Connection error: ' + (err.type || err.message || 'unknown'));
+      }
+    });
+
+    this.peer.on('disconnected', () => {
+      if (!this._destroyed) {
+        try { this.peer.reconnect(); } catch (e) {
+          console.error('Host reconnect failed:', e);
+        }
+      }
+    });
+
+    this.peer.on('close', () => {
+      if (!this._destroyed) {
+        this._fire('error-msg', 'Connection to server lost.');
       }
     });
   }
@@ -150,7 +186,6 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this._dispatch(msg.event, msg.data, 1);
   }
 
-  // Host's own actions
   emit(event, data) {
     if (!this.peer) return;
     this._dispatch(event, data, 0);
@@ -170,5 +205,11 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this._sendToGuest('game-state', this.engine.getStateForPlayer(1));
   }
 
-  destroy() { if (this.peer) this.peer.destroy(); }
+  destroy() {
+    this._destroyed = true;
+    clearTimeout(this._signalingTimer);
+    if (this.peer) {
+      try { this.peer.destroy(); } catch (e) {}
+    }
+  }
 }

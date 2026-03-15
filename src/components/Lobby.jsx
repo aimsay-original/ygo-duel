@@ -13,15 +13,30 @@ export default function Lobby({ onJoined, onModeSelect }) {
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [connStatus, setConnStatus] = useState('disconnected');
+  const [connStage, setConnStage] = useState('');
   const [waitingPlayers, setWaitingPlayers] = useState([]);
   const [copied, setCopied] = useState(false);
 
   const adapterRef = useRef(null);
   const nameRef = useRef('');
 
+  // Clean up any existing adapter before creating a new one
+  const cleanupAdapter = () => {
+    if (adapterRef.current) {
+      try { adapterRef.current.destroy(); } catch (e) {}
+      adapterRef.current = null;
+    }
+    if (socketRef.current) {
+      try { socketRef.current.destroy?.(); } catch (e) {}
+      socketRef.current = null;
+    }
+  };
+
   const createOnline = () => {
     if (!name.trim()) { setError('Enter your name'); return; }
+    cleanupAdapter();
     setConnStatus('connecting');
+    setConnStage('Connecting to server...');
     setError('');
     nameRef.current = name.trim();
 
@@ -33,6 +48,7 @@ export default function Lobby({ onJoined, onModeSelect }) {
       setFullPeerId(data.fullPeerId);
       setMode('creating');
       setConnStatus('connected');
+      setConnStage('');
     });
     adapter.on('room-update', (data) => {
       setWaitingPlayers(data.players);
@@ -40,6 +56,7 @@ export default function Lobby({ onJoined, onModeSelect }) {
     adapter.on('error-msg', (msg) => {
       setError(typeof msg === 'string' ? msg : 'Connection error');
       setConnStatus('disconnected');
+      setConnStage('');
     });
     onModeSelect('online');
   };
@@ -51,21 +68,30 @@ export default function Lobby({ onJoined, onModeSelect }) {
   const joinOnline = () => {
     if (!name.trim()) { setError('Enter your name'); return; }
     if (!joinCode.trim()) { setError('Enter room code'); return; }
+    cleanupAdapter();
     setConnStatus('connecting');
+    setConnStage('Connecting to server...');
     setError('');
 
     const code = joinCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     const hostId = 'ygoduel-' + code;
     const adapter = new OnlineGuestAdapter(hostId, name.trim());
+    adapterRef.current = adapter;
     socketRef.current = adapter;
+
+    adapter.on('connection-stage', (stage) => {
+      setConnStage(stage);
+    });
     adapter.on('connected', () => {
       setConnStatus('connected');
+      setConnStage('');
       onModeSelect('online');
       onJoined({ playerIndex: 1, name: name.trim(), roomId: code, adapter });
     });
     adapter.on('error-msg', (msg) => {
       setError(typeof msg === 'string' ? msg : 'Connection failed');
       setConnStatus('disconnected');
+      setConnStage('');
     });
   };
 
@@ -182,7 +208,7 @@ export default function Lobby({ onJoined, onModeSelect }) {
               <button className="lobby-btn secondary" onClick={() => setMode('joining-online')}>JOIN ROOM</button>
             </>
           )}
-          <button className="lobby-btn secondary" style={{marginTop:'5px',fontSize:'13px'}} onClick={() => { setMode('menu'); setConnStatus('disconnected'); }}>Back</button>
+          <button className="lobby-btn secondary" style={{marginTop:'5px',fontSize:'13px'}} onClick={() => { setMode('menu'); setConnStatus('disconnected'); cleanupAdapter(); }}>Back</button>
         </>
       )}
 
@@ -194,10 +220,24 @@ export default function Lobby({ onJoined, onModeSelect }) {
             onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
             maxLength={6} style={{letterSpacing:'4px',fontSize:'20px',textAlign:'center'}} />
           {connStatus === 'connecting' && (
-            <div className="conn-status"><div className="conn-dot connecting" /><span style={{color:'#ff9800'}}>Connecting...</span></div>
+            <div className="conn-status">
+              <div className="conn-dot connecting" />
+              <span style={{color:'#ff9800'}}>{connStage || 'Connecting...'}</span>
+            </div>
           )}
-          <button className="lobby-btn online-btn" onClick={joinOnline}>JOIN</button>
-          <button className="lobby-btn secondary" onClick={() => { setMode('online-choice'); setConnStatus('disconnected'); }}>Back</button>
+          {connStatus === 'connecting' ? (
+            <button className="lobby-btn secondary" onClick={() => {
+              cleanupAdapter();
+              setConnStatus('disconnected');
+              setConnStage('');
+              setError('');
+            }}>Cancel</button>
+          ) : (
+            <button className="lobby-btn online-btn" onClick={joinOnline}>JOIN</button>
+          )}
+          {connStatus !== 'connecting' && (
+            <button className="lobby-btn secondary" onClick={() => { setMode('online-choice'); setConnStatus('disconnected'); setConnStage(''); cleanupAdapter(); }}>Back</button>
+          )}
         </>
       )}
 
@@ -214,7 +254,14 @@ export default function Lobby({ onJoined, onModeSelect }) {
         </>
       )}
 
-      {error && <div className="lobby-error">{error}</div>}
+      {error && (
+        <div className="lobby-error">
+          {error}
+          {connStatus === 'disconnected' && mode === 'joining-online' && (
+            <button className="lobby-retry-btn" onClick={joinOnline}>Try Again</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
