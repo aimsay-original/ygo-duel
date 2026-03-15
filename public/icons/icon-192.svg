@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="24" fill="#1a1a2e"/>
+  <rect x="8" y="8" width="176" height="176" rx="20" fill="none" stroke="#ffd700" stroke-width="2" opacity="0.3"/>
+  <path d="M24 8 L24 24 L8 24" fill="none" stroke="#ffd700" stroke-width="2.5"/>
+  <path d="M168 8 L168 24 L184 24" fill="none" stroke="#ffd700" stroke-width="2.5"/>
+  <path d="M24 184 L24 168 L8 168" fill="none" stroke="#ffd700" stroke-width="2.5"/>
+  <path d="M168 184 L168 168 L184 168" fill="none" stroke="#ffd700" stroke-width="2.5"/>
+  <path d="M96 32 L108 48 L96 64 L84 48 Z" fill="#ffd700" opacity="0.8"/>
+  <text x="96" y="124" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="72" fill="#ffd700" letter-spacing="-2">YGO</text>
+  <text x="96" y="156" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="24" fill="#ffd700" opacity="0.6" letter-spacing="8">DUEL</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1a1a2e"/>
+  <path d="M256 100 L280 140 L256 180 L232 140 Z" fill="#ffd700" opacity="0.8"/>
+  <text x="256" y="320" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="172" fill="#ffd700" letter-spacing="-5">YGO</text>
+  <text x="256" y="392" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="56" fill="#ffd700" opacity="0.6" letter-spacing="18">DUEL</text>
+</svg>
