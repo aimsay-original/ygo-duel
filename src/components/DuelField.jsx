@@ -3,6 +3,10 @@ import { useSocketRef } from '../context/SocketContext';
 import { cardImg } from '../helpers/cardHelpers';
 import { CARD_BACK } from '../helpers/constants';
 
+function haptic(ms = 10) {
+  try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ }
+}
+
 export default function DuelField({ gameState }) {
   const socketRef = useSocketRef();
   const [selectedHandCard, setSelectedHandCard] = useState(null);
@@ -27,7 +31,7 @@ export default function DuelField({ gameState }) {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
-    const hGameOver = socket.on('game-over', (data) => setGameOver(data));
+    const hGameOver = socket.on('game-over', (data) => { setGameOver(data); haptic(50); });
     const hError = socket.on('error-msg', (msg) => {
       setToast({ type: 'error', text: typeof msg === 'string' ? msg : 'Error', id: Date.now() });
     });
@@ -59,8 +63,8 @@ export default function DuelField({ gameState }) {
 
   useEffect(() => {
     if (!gs) return;
-    if (prevLp.current.me !== undefined && prevLp.current.me !== gs.me.lp) { setLpAnimating('me'); setTimeout(()=>setLpAnimating(null),300); }
-    if (prevLp.current.opp !== undefined && prevLp.current.opp !== gs.opponent.lp) { setLpAnimating('opp'); setTimeout(()=>setLpAnimating(null),300); }
+    if (prevLp.current.me !== undefined && prevLp.current.me !== gs.me.lp) { setLpAnimating('me'); setTimeout(()=>setLpAnimating(null),300); haptic(20); }
+    if (prevLp.current.opp !== undefined && prevLp.current.opp !== gs.opponent.lp) { setLpAnimating('opp'); setTimeout(()=>setLpAnimating(null),300); haptic(20); }
     prevLp.current = { me: gs.me.lp, opp: gs.opponent.lp };
   }, [gs?.me?.lp, gs?.opponent?.lp]);
 
@@ -181,7 +185,7 @@ export default function DuelField({ gameState }) {
             handIndex: tributeMode.handIndex, zone: 'monsters',
             zoneIndex: targetZone, position: tributeMode.position,
             tributes: sel
-          });
+          }); haptic(25);
         }
         setTributeMode(null); closeMenus();
       }
@@ -191,7 +195,7 @@ export default function DuelField({ gameState }) {
     if (attackMode) return;
     if (placingCard && placingCard.zoneType === zone) {
       socketRef.current.emit('play-card', { handIndex: placingCard.handIndex, zone, zoneIndex: index, position: placingCard.position });
-      closeMenus(); return;
+      haptic(15); closeMenus(); return;
     }
     const card = gs.me[zone][index]; if (!card) return;
     const actions = [];
@@ -226,7 +230,7 @@ export default function DuelField({ gameState }) {
       if (isOpponent) {
         if (attackMode && zone === 'monsters' && card) {
           socketRef.current.emit('attack', { attackerIndex: attackMode.attackerIndex, targetIndex: index });
-          setAttackMode(null);
+          haptic(25); setAttackMode(null);
         }
         return;
       }
@@ -277,7 +281,7 @@ export default function DuelField({ gameState }) {
       </div>
 
       <div className="hand-area opponent-hand">
-        {Array.from({length:gs.opponent.handCount}).map((_,i)=><div key={i} className="hand-card facedown"><img src={CARD_BACK} alt="card" /></div>)}
+        {Array.from({length:gs.opponent.handCount}).map((_,i)=><div key={i} className="hand-card facedown"><img src={CARD_BACK} alt="card" loading="lazy" /></div>)}
       </div>
 
       <div className="field-area">
@@ -307,7 +311,7 @@ export default function DuelField({ gameState }) {
         {attackMode && <div className="zone-picker-msg" style={{background:'rgba(255,102,0,0.2)',color:'#ff6600',borderColor:'rgba(255,102,0,0.4)'}}>
           {gs.opponent.monsters.some(m => m !== null)
             ? 'Select an opponent\'s monster to attack'
-            : <span style={{padding:'4px 12px',background:'rgba(255,102,0,0.3)',borderRadius:'6px',cursor:'pointer',fontWeight:700}} onClick={()=>{socketRef.current.emit('attack',{attackerIndex:attackMode.attackerIndex,targetIndex:-1});setAttackMode(null);}}>Direct Attack!</span>
+            : <span style={{padding:'4px 12px',background:'rgba(255,102,0,0.3)',borderRadius:'6px',cursor:'pointer',fontWeight:700}} onClick={()=>{socketRef.current.emit('attack',{attackerIndex:attackMode.attackerIndex,targetIndex:-1});haptic(30);setAttackMode(null);}}>Direct Attack!</span>
           }
           <span style={{marginLeft:'10px',fontSize:'12px',cursor:'pointer',textDecoration:'underline'}} onClick={()=>setAttackMode(null)}>Cancel</span>
         </div>}
@@ -333,7 +337,7 @@ export default function DuelField({ gameState }) {
 
       <div className="duel-bottombar">
         <button className={`action-btn draw ${(!isMyTurn || gs.phase !== 'draw' || gs.turn === 1 || gs.me.hasDrawn)?'disabled':''}`}
-          onClick={()=>{ if(isMyTurn && gs.phase === 'draw' && gs.turn !== 1 && !gs.me.hasDrawn) socketRef.current.emit('draw-card'); }}>
+          onClick={()=>{ if(isMyTurn && gs.phase === 'draw' && gs.turn !== 1 && !gs.me.hasDrawn) { socketRef.current.emit('draw-card'); haptic(10); } }}>
           {gs.me.hasDrawn ? 'Drew \u2713' : gs.turn === 1 && isMyTurn ? 'No Draw T1' : 'Draw'}
         </button>
         <button className="action-btn tools" onClick={()=>setShowLog(!showLog)}>Log</button>
