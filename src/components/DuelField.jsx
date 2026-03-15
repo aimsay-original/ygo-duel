@@ -23,8 +23,13 @@ export default function DuelField({ gameState }) {
   const [resultOverlay, setResultOverlay] = useState(null);
   const [logToast, setLogToast] = useState(null);
   const [connBanner, setConnBanner] = useState(null);
+  const [previewCard, setPreviewCard] = useState(null);
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  const [pendingRequest, setPendingRequest] = useState(false);
   const prevLp = useRef({});
   const prevLogLen = useRef(0);
+  const longPressTimer = useRef(null);
+  const didLongPress = useRef(false);
   const gs = gameState;
   const isMyTurn = gs && gs.currentPlayer === gs.myIndex;
 
@@ -58,7 +63,22 @@ export default function DuelField({ gameState }) {
         setConnBanner({ status: 'disconnected', text: '\u25cf Opponent disconnected \u2014 attempting to reconnect...' });
       }
     });
-    return () => { socket.off('game-over', hGameOver); socket.off('error-msg', hError); socket.off('coin-result', hCoin); socket.off('dice-result', hDice); socket.off('view-zone-result', hZone); socket.off('view-top-result', hTopCard); socket.off('connection-status', hConnStatus); };
+    const hConfirmReq = socket.on('confirm-request', (data) => {
+      setConfirmRequest(data);
+      haptic(30);
+    });
+    const hRequestResult = socket.on('request-result', (data) => {
+      setPendingRequest(false);
+      if (data.accepted) {
+        setToast({ type: 'info', text: data.message || 'Request approved!', id: Date.now() });
+      } else {
+        setToast({ type: 'error', text: data.message || 'Request denied.', id: Date.now() });
+      }
+    });
+    const hRequestPending = socket.on('request-pending', () => {
+      setPendingRequest(true);
+    });
+    return () => { socket.off('game-over', hGameOver); socket.off('error-msg', hError); socket.off('coin-result', hCoin); socket.off('dice-result', hDice); socket.off('view-zone-result', hZone); socket.off('view-top-result', hTopCard); socket.off('connection-status', hConnStatus); socket.off('confirm-request', hConfirmReq); socket.off('request-result', hRequestResult); socket.off('request-pending', hRequestPending); };
   }, []);
 
   useEffect(() => {
@@ -113,11 +133,26 @@ export default function DuelField({ gameState }) {
     if (gs.turn === 1 && p === 'battle') return false;
     return true;
   };
-  const closeMenus = () => { setSelectedHandCard(null); setPlacingCard(null); setCardActionMenu(null); setShowMenu(false); setShowZoneViewer(null); setTributeMode(null); setAttackMode(null); };
+  const closeMenus = () => { setSelectedHandCard(null); setPlacingCard(null); setCardActionMenu(null); setShowMenu(false); setShowZoneViewer(null); setTributeMode(null); setAttackMode(null); setPreviewCard(null); };
+
+  // ─── Long-press for card preview ──────────────────────
+  const startLongPress = (card) => {
+    if (!card || card.hidden) return;
+    didLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setPreviewCard(card);
+      haptic(15);
+    }, 400);
+  };
+  const cancelLongPress = () => {
+    clearTimeout(longPressTimer.current);
+  };
   const lpClass = lp => lp > 4000 ? 'high' : lp > 2000 ? 'mid' : 'low';
   const oppIndex = 1 - gs.myIndex;
 
   const handleHandCardTap = (index) => {
+    if (didLongPress.current) { didLongPress.current = false; return; }
     if (tributeMode) return;
     if (selectedHandCard === index) { setSelectedHandCard(null); setPlacingCard(null); return; }
     setSelectedHandCard(index);
@@ -156,6 +191,12 @@ export default function DuelField({ gameState }) {
       actions.push({ label: 'Normal Summon (Main Phase only)', action: () => {} });
     }
 
+    // Special Summon from Hand (any monster, requires opponent confirmation)
+    if (isMonster) {
+      actions.push({ label: 'Special Summon (ATK)', action: () => { setPlacingCard({ handIndex: index, zoneType: 'monsters', position: 'atk', needsConfirmation: true, isSpecial: true }); setCardActionMenu(null); } });
+      actions.push({ label: 'Special Summon (DEF)', action: () => { setPlacingCard({ handIndex: index, zoneType: 'monsters', position: 'def', needsConfirmation: true, isSpecial: true }); setCardActionMenu(null); } });
+    }
+
     if (isSpell) {
       actions.push({ label: 'Activate', action: () => { setPlacingCard({ handIndex: index, zoneType: 'spells', position: 'active' }); setCardActionMenu(null); } });
       actions.push({ label: 'Set', action: () => { setPlacingCard({ handIndex: index, zoneType: 'spells', position: 'facedown' }); setCardActionMenu(null); } });
@@ -167,9 +208,11 @@ export default function DuelField({ gameState }) {
     setCardActionMenu({ card, actions });
   };
 
-  const handleZoneClick = (zone, index) => {
+  const handleZoneClick = (zone, index, isOpponentZone = false) => {
+    if (didLongPress.current) { didLongPress.current = false; return; }
+
     // ===== TRIBUTE SELECTION MODE =====
-    if (tributeMode && zone === 'monsters') {
+    if (tributeMode && zone === 'monsters' && !isOpponentZone) {
       const card = gs.me.monsters[index];
       if (!card) return;
       const sel = [...tributeMode.selected];
@@ -193,10 +236,26 @@ export default function DuelField({ gameState }) {
     }
 
     if (attackMode) return;
+
+    // ===== PLACING CARD ON ZONE (own or opponent's) =====
     if (placingCard && placingCard.zoneType === zone) {
+      if (isOpponentZone || placingCard.needsConfirmation) {
+        // Needs opponent confirmation — send request
+        socketRef.current.emit('play-card-request', {
+          handIndex: placingCard.handIndex, zone, zoneIndex: index,
+          position: placingCard.position,
+          isSpecial: placingCard.isSpecial || false,
+          targetPlayer: isOpponentZone ? oppIndex : gs.myIndex
+        });
+        haptic(15); closeMenus(); return;
+      }
       socketRef.current.emit('play-card', { handIndex: placingCard.handIndex, zone, zoneIndex: index, position: placingCard.position });
       haptic(15); closeMenus(); return;
     }
+
+    // Don't open action menus for opponent's cards
+    if (isOpponentZone) return;
+
     const card = gs.me[zone][index]; if (!card) return;
     const actions = [];
     if (zone === 'monsters') {
@@ -226,22 +285,45 @@ export default function DuelField({ gameState }) {
     const tributeStyle = isTributeTarget ? { border: '2px solid #f44336', boxShadow: isTributeSelected ? '0 0 12px rgba(244,67,54,0.8)' : '0 0 6px rgba(244,67,54,0.3)' } : {};
     const isAttackTarget = attackMode && isOpponent && zone === 'monsters' && card;
     const attackTargetStyle = isAttackTarget ? { border: '2px solid #ff6600', boxShadow: '0 0 10px rgba(255,102,0,0.5)', cursor: 'pointer' } : {};
+    // Highlight opponent's empty zones when placing a card
+    const isOppPlaceTarget = placingCard && isOpponent && placingCard.zoneType === zone && !card;
+    const oppPlaceStyle = isOppPlaceTarget ? { border: '1px solid #ffd700', boxShadow: '0 0 8px rgba(255,215,0,0.4)' } : {};
     const handleClick = () => {
+      if (didLongPress.current) { didLongPress.current = false; return; }
       if (isOpponent) {
         if (attackMode && zone === 'monsters' && card) {
           socketRef.current.emit('attack', { attackerIndex: attackMode.attackerIndex, targetIndex: index });
           haptic(25); setAttackMode(null);
+          return;
+        }
+        // Allow clicking empty opponent zones when placing a card
+        if (placingCard && placingCard.zoneType === zone && !card) {
+          handleZoneClick(zone, index, true);
+          return;
         }
         return;
       }
       handleZoneClick(zone, index);
     };
 
-    if (!card) return <div key={`${zone}-${index}`} className={`card-zone ${zone==='monsters'?'monster-zone':'spell-zone'} ${placingCard&&placingCard.zoneType===zone?'highlight':''}`} onClick={()=>!isOpponent&&handleZoneClick(zone,index)} />;
+    // Long-press props for card preview
+    const lpProps = (c) => (!c || c.hidden) ? {} : {
+      onTouchStart: () => startLongPress(c),
+      onTouchEnd: cancelLongPress,
+      onTouchMove: cancelLongPress,
+      onMouseDown: () => startLongPress(c),
+      onMouseUp: cancelLongPress,
+      onMouseLeave: cancelLongPress
+    };
+
+    if (!card) return <div key={`${zone}-${index}`} className={`card-zone ${zone==='monsters'?'monster-zone':'spell-zone'} ${(placingCard&&placingCard.zoneType===zone)?'highlight':''}`} style={oppPlaceStyle} onClick={()=>{
+      if (isOpponent && placingCard && placingCard.zoneType === zone) { handleZoneClick(zone, index, true); return; }
+      if (!isOpponent) handleZoneClick(zone, index);
+    }} />;
     if (card.hidden) return <div key={`${zone}-${index}`} className="card-zone has-card" style={attackTargetStyle} onClick={handleClick}><div className="facedown-card" />{(card.position==='def'||card.position==='facedown-def')&&<div className="def-indicator">DEF</div>}</div>;
     const isDef = card.position === 'def' || card.position === 'facedown-def';
     const combinedStyle = { ...tributeStyle, ...attackTargetStyle };
-    return <div key={`${zone}-${index}`} className={`card-zone has-card`} style={combinedStyle} onClick={handleClick}>
+    return <div key={`${zone}-${index}`} className={`card-zone has-card`} style={combinedStyle} onClick={handleClick} {...lpProps(card)}>
       <img src={cardImg(card)} alt={card.name||'?'} style={isDef?{transform:'rotate(90deg)',width:'100%',height:'100%',objectFit:'contain'}:{}} />
       {isDef && <div className="def-indicator">DEF</div>}
     </div>;
@@ -303,7 +385,12 @@ export default function DuelField({ gameState }) {
           <div className="side-zone" onClick={()=>socketRef.current.emit('view-zone',{targetPlayer:gs.myIndex,zone:'extraDeck'})}><div className="sz-count">{gs.me.extraDeck.length}</div><div className="sz-label">Extra</div></div>
         </div>
         {gs.me.fieldSpell && <div className="field-spell-zone my-fs"><div className="card-zone has-card" style={{width:'var(--side-w)',height:'var(--side-h)'}} onClick={()=>setCardActionMenu({card:gs.me.fieldSpell,actions:[{label:'To GY',action:()=>{socketRef.current.emit('move-card',{from:{zone:'fieldSpell'},to:{zone:'graveyard'}});closeMenus();}}]})}>{gs.me.fieldSpell.facedown?<div className="facedown-card"/>:<img src={cardImg(gs.me.fieldSpell)} alt="Field"/>}</div></div>}
-        {placingCard && <div className="zone-picker-msg">Tap a zone to place your card</div>}
+        {placingCard && <div className="zone-picker-msg">
+          {placingCard.needsConfirmation
+            ? 'Tap a zone (opponent zones require confirmation)'
+            : 'Tap a zone to place your card'}
+          <span style={{marginLeft:'10px',fontSize:'12px',cursor:'pointer',textDecoration:'underline'}} onClick={()=>{setPlacingCard(null);setSelectedHandCard(null);}}>Cancel</span>
+        </div>}
         {tributeMode && <div className="zone-picker-msg" style={{background:'rgba(244,67,54,0.2)',color:'#f44336',borderColor:'rgba(244,67,54,0.4)'}}>
           Select {tributeMode.tributesNeeded} monster{tributeMode.tributesNeeded>1?'s':''} to tribute ({tributeMode.selected.length}/{tributeMode.tributesNeeded})
           <span style={{marginLeft:'10px',fontSize:'12px',cursor:'pointer',textDecoration:'underline'}} onClick={()=>setTributeMode(null)}>Cancel</span>
@@ -318,7 +405,10 @@ export default function DuelField({ gameState }) {
       </div>
 
       <div className="hand-area">
-        {gs.me.hand.map((card,i) => <div key={i} className={`hand-card ${selectedHandCard===i?'selected':''}`} onClick={()=>handleHandCardTap(i)}><img src={cardImg(card)} alt={card.name} /></div>)}
+        {gs.me.hand.map((card,i) => <div key={i} className={`hand-card ${selectedHandCard===i?'selected':''}`} onClick={()=>handleHandCardTap(i)}
+          onTouchStart={()=>startLongPress(card)} onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress}
+          onMouseDown={()=>startLongPress(card)} onMouseUp={cancelLongPress} onMouseLeave={cancelLongPress}
+        ><img src={cardImg(card)} alt={card.name} /></div>)}
       </div>
 
       <div className="player-info me">
@@ -427,6 +517,59 @@ export default function DuelField({ gameState }) {
           </div>
           <button className="lobby-btn" onClick={()=>{setGameOver(null);socketRef.current.emit('rematch');}}>REMATCH</button>
         </div>
+      )}
+
+      {/* ─── Card Preview Overlay ─── */}
+      {previewCard && (
+        <div className="card-preview-overlay" onClick={() => setPreviewCard(null)}>
+          <div className="card-preview-content" onClick={e => e.stopPropagation()}>
+            <img src={cardImg(previewCard)} alt={previewCard.name || '?'} className="card-preview-img" />
+            <div className="card-preview-name">{previewCard.name}</div>
+            {previewCard.type && <div className="card-preview-type">{previewCard.type}</div>}
+            {previewCard.attribute && <div className="card-preview-attr">
+              {previewCard.attribute}{previewCard.level ? ` ${'★'.repeat(previewCard.level)}` : ''}
+            </div>}
+            {previewCard.atk !== undefined && (
+              <div className="card-preview-stats">ATK {previewCard.atk} / DEF {previewCard.def}</div>
+            )}
+            {previewCard.desc && <div className="card-preview-desc">{previewCard.desc}</div>}
+            <div className="card-preview-close" onClick={() => setPreviewCard(null)}>Tap to close</div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Opponent Confirmation Modal ─── */}
+      {confirmRequest && (
+        <div className="confirm-overlay">
+          <div className="confirm-modal">
+            <div className="confirm-title">Opponent Request</div>
+            <div className="confirm-body">
+              <strong>{confirmRequest.requesterName}</strong> wants to <strong>{confirmRequest.action}</strong>
+              {confirmRequest.card && !confirmRequest.card.hidden && (
+                <span> &quot;{confirmRequest.card.name}&quot;</span>
+              )}
+              {confirmRequest.targetZone && <span> {confirmRequest.targetZone}</span>}
+            </div>
+            {confirmRequest.card && confirmRequest.card.atk !== undefined && (
+              <div className="confirm-stats">ATK {confirmRequest.card.atk} / DEF {confirmRequest.card.def}</div>
+            )}
+            <div className="confirm-btns">
+              <button className="confirm-btn deny" onClick={() => {
+                socketRef.current.emit('confirm-response', { requestId: confirmRequest.requestId, accepted: false });
+                setConfirmRequest(null);
+              }}>Deny</button>
+              <button className="confirm-btn allow" onClick={() => {
+                socketRef.current.emit('confirm-response', { requestId: confirmRequest.requestId, accepted: true });
+                setConfirmRequest(null);
+              }}>Allow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Pending Request Indicator ─── */}
+      {pendingRequest && (
+        <div className="pending-banner">Waiting for opponent's response...</div>
       )}
 
       {toast && <div key={toast.id} className={`toast ${toast.type}`}>{toast.text}</div>}

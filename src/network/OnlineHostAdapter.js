@@ -16,6 +16,8 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this._guestPeerId = null;
     this._dataChannelOpen = false;
     this._guestConnected = false;
+    this._pendingRequests = new Map();
+    this._requestIdCounter = 0;
 
     // Generate a short 6-char room code (no ambiguous chars)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -248,6 +250,66 @@ export class OnlineHostAdapter extends NetworkAdapter {
         this.engine.playerNames[pi === 0 ? 0 : 1] = data.name;
         this._broadcast('room-update', { players: this.engine.playerNames });
         break;
+
+      // ─── Opponent Confirmation System ───────────────────
+      case 'play-card-request': {
+        const requestId = ++this._requestIdCounter;
+        const card = this.engine.game.players[pi].hand[data.handIndex];
+        if (!card) { sendError('No card'); return; }
+
+        // Build description for opponent
+        let action = 'play a card';
+        if (data.isSpecial) action = 'special summon';
+        else if (data.zone === 'monsters') action = 'summon';
+        else if (data.zone === 'spells') action = data.position === 'facedown' ? 'set a card' : 'activate';
+        else if (data.zone === 'fieldSpell') action = 'activate field spell';
+        const isOnOppSide = data.targetPlayer !== undefined && data.targetPlayer !== pi;
+        const targetZone = isOnOppSide ? `on your ${data.zone === 'monsters' ? 'Monster' : 'Spell/Trap'} Zone` : '';
+
+        this._pendingRequests.set(requestId, { requester: pi, data, card });
+
+        // Send confirmation to opponent
+        const sendToOpp = pi === 0 ? (ev, d) => this._sendToGuest(ev, d) : (ev, d) => this._fire(ev, d);
+        sendToOpp('confirm-request', {
+          requestId,
+          requesterName: this.engine.playerNames[pi],
+          card: { name: card.name, type: card.type, atk: card.atk, def: card.def, level: card.level },
+          action,
+          targetZone
+        });
+
+        // Notify requester that request is pending
+        sendPrivate('request-pending', { requestId });
+
+        // Auto-timeout after 30 seconds
+        setTimeout(() => {
+          if (this._pendingRequests.has(requestId)) {
+            this._pendingRequests.delete(requestId);
+            sendPrivate('request-result', { accepted: false, message: 'Request timed out.' });
+          }
+        }, 30000);
+        break;
+      }
+      case 'confirm-response': {
+        const pending = this._pendingRequests.get(data.requestId);
+        if (!pending) return;
+        this._pendingRequests.delete(data.requestId);
+        const sendToRequester = pending.requester === 0 ? (ev, d) => this._fire(ev, d) : (ev, d) => this._sendToGuest(ev, d);
+
+        if (data.accepted) {
+          // Execute the play
+          result = this.engine.playCard(pending.requester, pending.data);
+          if (result?.error) {
+            sendToRequester('request-result', { accepted: false, message: result.error });
+          } else {
+            sendToRequester('request-result', { accepted: true, message: `${pending.card.name} played!` });
+            this._broadcastState();
+          }
+        } else {
+          sendToRequester('request-result', { accepted: false, message: `${this.engine.playerNames[pi]} denied your request.` });
+        }
+        break;
+      }
     }
   }
 

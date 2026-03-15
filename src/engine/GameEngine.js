@@ -99,13 +99,16 @@ export class GameEngine {
 
   playCard(pi, data) {
     const g = this.game;
-    const s = g.players[pi];
+    const s = g.players[pi]; // source: card comes from this player's hand
+    const tp = (data.targetPlayer !== undefined && data.targetPlayer !== pi) ? data.targetPlayer : pi;
+    const t = g.players[tp]; // target: card goes to this player's field
     const card = s.hand[data.handIndex];
     if (!card) return { error: 'No card' };
+    const onOppSide = tp !== pi;
     if (data.zone === 'monsters') {
       // Enforce main phase for monster summons
       if (g.phase !== 'main1' && g.phase !== 'main2') return { error: 'Can only summon during Main Phase!' };
-      if (s.monsters[data.zoneIndex] !== null) return { error: 'Zone occupied!' };
+      if (t.monsters[data.zoneIndex] !== null) return { error: 'Zone occupied!' };
       // Enforce normal summon limit (special summons bypass this via specialSummonExtra)
       if (!data.isSpecial) {
         if (s.hasNormalSummoned) return { error: 'Already Normal Summoned this turn!' };
@@ -129,21 +132,24 @@ export class GameEngine {
         }
         s.hasNormalSummoned = true;
       }
-      s.monsters[data.zoneIndex] = { ...card, position: data.position || 'atk', canAttack: true, hasChangedPosition: false, summonedThisTurn: true };
+      t.monsters[data.zoneIndex] = { ...card, position: data.position || 'atk', canAttack: true, hasChangedPosition: false, summonedThisTurn: true };
       s.hand.splice(data.handIndex, 1);
       const posLabel = (data.position || '').includes('facedown') ? 'face-down' : (data.position === 'def' ? 'DEF' : 'ATK');
-      const action = (data.tributes && data.tributes.length > 0) ? 'tribute summoned' : ((data.position || '').includes('facedown') ? 'set' : 'summoned');
-      g.log.push(`${this.playerNames[pi]} ${action} ${posLabel.includes('face-down') ? 'a monster' : card.name} in ${posLabel}.`);
+      const action = data.isSpecial ? 'special summoned' : ((data.tributes && data.tributes.length > 0) ? 'tribute summoned' : ((data.position || '').includes('facedown') ? 'set' : 'summoned'));
+      const where = onOppSide ? ` on ${this.playerNames[tp]}'s field` : '';
+      g.log.push(`${this.playerNames[pi]} ${action} ${posLabel.includes('face-down') ? 'a monster' : card.name} in ${posLabel}${where}.`);
     } else if (data.zone === 'spells') {
-      if (s.spells[data.zoneIndex] !== null) return { error: 'Zone occupied!' };
-      s.spells[data.zoneIndex] = { ...card, facedown: data.position === 'facedown' };
+      if (t.spells[data.zoneIndex] !== null) return { error: 'Zone occupied!' };
+      t.spells[data.zoneIndex] = { ...card, facedown: data.position === 'facedown' };
       s.hand.splice(data.handIndex, 1);
-      g.log.push(`${this.playerNames[pi]} ${data.position === 'facedown' ? 'set a card' : 'activated ' + card.name}.`);
+      const where = onOppSide ? ` on ${this.playerNames[tp]}'s field` : '';
+      g.log.push(`${this.playerNames[pi]} ${data.position === 'facedown' ? 'set a card' : 'activated ' + card.name}${where}.`);
     } else if (data.zone === 'fieldSpell') {
-      if (s.fieldSpell) s.graveyard.push(s.fieldSpell);
-      s.fieldSpell = { ...card, facedown: data.position === 'facedown' };
+      if (t.fieldSpell) t.graveyard.push(t.fieldSpell);
+      t.fieldSpell = { ...card, facedown: data.position === 'facedown' };
       s.hand.splice(data.handIndex, 1);
-      g.log.push(`${this.playerNames[pi]} activated field spell: ${card.name}.`);
+      const where = onOppSide ? ` on ${this.playerNames[tp]}'s field` : '';
+      g.log.push(`${this.playerNames[pi]} activated field spell: ${card.name}${where}.`);
     }
     this._trimLog();
     return { ok: true };

@@ -660,3 +660,102 @@ html, body {
 .save-modal-input:focus { outline: none; border-color: rgba(255,215,0,0.5); }
 .save-modal-btns { display: flex; gap: 10px; }
 .save-modal-btns .db-btn { flex: 1; padding: 10px !important; font-size: 14px !important; }
+
+/* ── Card Preview Overlay ── */
+.card-preview-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.92); z-index: 75;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+.card-preview-content {
+  display: flex; flex-direction: column; align-items: center;
+  max-width: 320px; width: 100%; max-height: 90vh;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.card-preview-img {
+  width: 200px; border-radius: 8px;
+  margin-bottom: 12px; box-shadow: 0 4px 30px rgba(255,215,0,0.2);
+}
+.card-preview-name {
+  font-size: 20px; font-weight: 700; color: #ffd700;
+  text-align: center; margin-bottom: 4px;
+}
+.card-preview-type {
+  font-size: 13px; color: #aaa; text-align: center; margin-bottom: 2px;
+}
+.card-preview-attr {
+  font-size: 13px; color: #888; text-align: center; margin-bottom: 6px;
+}
+.card-preview-stats {
+  font-size: 16px; font-weight: 600; color: #ff8c00;
+  text-align: center; margin-bottom: 10px;
+}
+.card-preview-desc {
+  font-size: 13px; color: #ccc; text-align: center;
+  line-height: 1.5; padding: 10px 12px;
+  background: rgba(255,255,255,0.05); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  max-height: 180px; overflow-y: auto;
+  width: 100%;
+}
+.card-preview-close {
+  margin-top: 16px; font-size: 12px; color: #666;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* ── Opponent Confirmation Modal ── */
+.confirm-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8); z-index: 72;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+.confirm-modal {
+  background: #1a1a2e; border: 2px solid rgba(255,215,0,0.4);
+  border-radius: 16px; padding: 24px; width: 100%; max-width: 300px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  animation: resultPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.confirm-title {
+  font-size: 16px; font-weight: 700; color: #ffd700;
+  text-align: center; margin-bottom: 12px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.confirm-body {
+  font-size: 15px; color: #e0e0e0; text-align: center;
+  line-height: 1.5; margin-bottom: 8px;
+}
+.confirm-body strong { color: #ffd700; }
+.confirm-stats {
+  font-size: 14px; color: #ff8c00; text-align: center;
+  font-weight: 600; margin-bottom: 16px;
+}
+.confirm-btns { display: flex; gap: 12px; }
+.confirm-btn {
+  flex: 1; padding: 12px; border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: transform 0.1s;
+  min-height: 44px;
+}
+.confirm-btn:active { transform: scale(0.95); }
+.confirm-btn.deny {
+  background: rgba(244,67,54,0.25); color: #f44336;
+  border: 1px solid rgba(244,67,54,0.4);
+}
+.confirm-btn.allow {
+  background: rgba(76,175,80,0.25); color: #4caf50;
+  border: 1px solid rgba(76,175,80,0.4);
+}
+
+/* ── Pending Request Banner ── */
+.pending-banner {
+  position: fixed; top: 50px; left: 50%; transform: translateX(-50%);
+  z-index: 65; padding: 8px 20px; border-radius: 10px;
+  background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.3);
+  color: #ffd700; font-size: 13px; font-weight: 600;
+  animation: pulse 1.5s infinite;
+  pointer-events: none; white-space: nowrap;
+}
