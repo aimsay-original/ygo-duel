@@ -1,7 +1,7 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
 import { GameEngine } from '../engine/GameEngine';
-import { getPeerConfig, SIGNALING_TIMEOUT } from './peerConfig';
+import { PEER_CONFIG, SIGNALING_TIMEOUT } from './peerConfig';
 
 export class OnlineHostAdapter extends NetworkAdapter {
   constructor(playerName) {
@@ -10,11 +10,12 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this.engine.playerNames[0] = playerName;
     this.conn = null;
     this.peerId = null;
-    this.ready = false;
     this.roomCode = null;
     this._signalingTimer = null;
     this._destroyed = false;
-    this.peer = null;
+    this._guestPeerId = null;
+    this._dataChannelOpen = false;
+    this._guestConnected = false;
 
     // Generate a short 6-char room code (no ambiguous chars)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -22,29 +23,10 @@ export class OnlineHostAdapter extends NetworkAdapter {
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     this.roomCode = code;
 
-    // Async init: fetch TURN creds then create Peer
-    this._init(code);
-  }
+    this.peer = new Peer('ygoduel-' + code, PEER_CONFIG);
 
-  async _init(code) {
-    if (this._destroyed) return;
-
-    let config;
-    try {
-      config = await getPeerConfig();
-    } catch (e) {
-      console.warn('getPeerConfig failed, using defaults:', e);
-      config = { debug: 0, serialization: 'json', config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
-    }
-
-    if (this._destroyed) return;
-
-    this.peer = new Peer('ygoduel-' + code, config);
-
-    // Timeout: if signaling server doesn't respond within SIGNALING_TIMEOUT
     this._signalingTimer = setTimeout(() => {
       if (!this._destroyed && !this.peer.open) {
-        console.error('PeerJS signaling server timeout (host)');
         this._fire('error-msg', 'Could not reach game server. Check your internet connection and try again.');
         this.destroy();
       }
@@ -53,16 +35,23 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this.peer.on('open', (id) => {
       clearTimeout(this._signalingTimer);
       this.peerId = id;
+      // Set up signaling relay listener immediately
+      this._setupSignalingRelay();
       this._fire('room-created', { roomId: code, fullPeerId: id, playerIndex: 0 });
     });
 
+    // DataChannel connection (optional optimization for same-network)
     this.peer.on('connection', (conn) => {
-      // Accept reconnections — replace old connection
       if (this.conn) { try { this.conn.close(); } catch(e) {} }
       this.conn = conn;
       conn.on('open', () => {
-        this._fire('connection-status', { status: 'connected' });
-        this._fire('room-update', { players: this.engine.playerNames, message: 'Opponent connected!' });
+        this._dataChannelOpen = true;
+        // If guest already connected via relay, this is just an upgrade
+        if (!this._guestConnected) {
+          this._guestConnected = true;
+          this._fire('connection-status', { status: 'connected' });
+          this._fire('room-update', { players: this.engine.playerNames, message: 'Opponent connected!' });
+        }
       });
       conn.on('data', (msg) => {
         if (msg.event === 'reconnect') {
@@ -75,16 +64,18 @@ export class OnlineHostAdapter extends NetworkAdapter {
         this._handleGuestMessage(msg);
       });
       conn.on('error', (err) => {
-        console.error('Host data connection error:', err);
+        console.warn('Host data connection error (non-fatal, relay active):', err);
       });
       conn.on('close', () => {
-        this._fire('connection-status', { status: 'disconnected' });
+        this._dataChannelOpen = false;
+        if (this._guestConnected) {
+          this._fire('connection-status', { status: 'disconnected' });
+        }
       });
     });
 
     this.peer.on('error', (err) => {
       clearTimeout(this._signalingTimer);
-      console.error('Peer error:', err);
       if (err.type === 'unavailable-id') {
         this._fire('error-msg', 'Room code taken — please try again.');
       } else if (err.type === 'network') {
@@ -98,9 +89,7 @@ export class OnlineHostAdapter extends NetworkAdapter {
 
     this.peer.on('disconnected', () => {
       if (!this._destroyed) {
-        try { this.peer.reconnect(); } catch (e) {
-          console.error('Host reconnect failed:', e);
-        }
+        try { this.peer.reconnect(); } catch (e) {}
       }
     });
 
@@ -111,7 +100,69 @@ export class OnlineHostAdapter extends NetworkAdapter {
     });
   }
 
-  // Unified action dispatcher — called by both host emit() and guest message handler
+  // ─── Signaling Relay ───────────────────────────────────
+  // Routes game data through PeerJS's signaling server (0.peerjs.com)
+  // This bypasses all NAT/firewall/TURN issues — works everywhere.
+
+  _setupSignalingRelay() {
+    const ws = this.peer?.socket?._socket;
+    if (!ws) return;
+
+    ws.addEventListener('message', (event) => {
+      if (this._destroyed) return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type !== 'RELAY' || !msg.payload) return;
+
+        const { event: evt, data } = msg.payload;
+
+        // Guest connecting for the first time
+        if (evt === 'set-name' && !this._guestConnected) {
+          this._guestPeerId = msg.src;
+          this._guestConnected = true;
+          this.engine.playerNames[1] = data.name;
+          // Send confirmation back to guest via relay
+          this._sendViaRelay('relay-connected', {});
+          this._fire('connection-status', { status: 'connected' });
+          this._fire('room-update', { players: this.engine.playerNames, message: 'Opponent connected!' });
+          return;
+        }
+
+        // Guest reconnecting
+        if (evt === 'reconnect') {
+          this._guestPeerId = msg.src;
+          this._guestConnected = true;
+          this.engine.playerNames[1] = data.name;
+          this._broadcastState();
+          this._sendViaRelay('relay-connected', {});
+          this._fire('room-update', { players: this.engine.playerNames, message: 'Opponent reconnected!' });
+          this._fire('connection-status', { status: 'connected' });
+          return;
+        }
+
+        // Regular game messages from the guest (via relay)
+        if (msg.src === this._guestPeerId) {
+          this._handleGuestMessage(msg.payload);
+        }
+      } catch {}
+    });
+  }
+
+  _sendViaRelay(event, data) {
+    if (!this._guestPeerId || this._destroyed) return;
+    try {
+      this.peer.socket.send({
+        type: 'RELAY',
+        dst: this._guestPeerId,
+        payload: { event, data }
+      });
+    } catch (e) {
+      console.warn('Relay send failed:', e);
+    }
+  }
+
+  // ─── Game Logic ────────────────────────────────────────
+
   _dispatch(event, data, pi) {
     const sendError = pi === 0 ? (msg) => this._fire('error-msg', msg) : (msg) => this._sendToGuest('error-msg', msg);
     const sendPrivate = pi === 0 ? (ev, d) => this._fire(ev, d) : (ev, d) => this._sendToGuest(ev, d);
@@ -210,7 +261,12 @@ export class OnlineHostAdapter extends NetworkAdapter {
   }
 
   _sendToGuest(event, data) {
-    if (this.conn && this.conn.open) this.conn.send({ event, data });
+    // Try DataChannel first (lower latency), fall back to signaling relay
+    if (this._dataChannelOpen && this.conn && this.conn.open) {
+      this.conn.send({ event, data });
+    } else {
+      this._sendViaRelay(event, data);
+    }
   }
 
   _broadcast(event, data) {

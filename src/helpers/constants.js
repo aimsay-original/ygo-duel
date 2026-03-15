@@ -10,6 +10,7 @@ export const PRESETS = [
   { name: 'Blue-Eyes', archetype: 'Blue-Eyes', desc: 'Classic powerhouse dragons' },
   { name: 'Dark Magician', archetype: 'Dark Magician', desc: 'Spellcaster mastery' },
   { name: 'HERO', archetype: 'HERO', desc: 'Fusion-based heroes' },
+  { name: 'Six Samurai', archetype: 'Six Samurai', desc: 'Swarming warrior synchro' },
   { name: 'Stardust', archetype: 'Stardust', desc: 'Synchro dragon power' },
   { name: 'Utopia', archetype: 'Utopia', desc: 'Xyz rank-up warriors' },
   { name: 'Salamangreat', archetype: 'Salamangreat', desc: 'Link-based fire cyberse' },

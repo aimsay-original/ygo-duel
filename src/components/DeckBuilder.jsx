@@ -92,11 +92,14 @@ export default function DeckBuilder({ onDeckReady, playerName }) {
           else { if (main.length < 60) main.push(card); }
         }
         setMainDeck(main); setExtraDeck(extra); setTab('mydeck');
+        // Auto-save the preset as "my deck" so the player can edit and it persists
+        saveDeck(archetype + ' Deck', main, extra);
+        setSavedDecks(getSavedDecks());
         const total = main.length + extra.length;
         if (main.length < 40) {
-          setSuccessMsg(`Loaded ${total} ${archetype} cards. Search for more to reach 40!`);
+          setSuccessMsg(`Loaded ${total} ${archetype} cards — saved as "${archetype} Deck". Search for more to reach 40!`);
         } else {
-          setSuccessMsg(`Loaded ${total} ${archetype} cards! Edit below or tap Done.`);
+          setSuccessMsg(`Loaded ${total} ${archetype} cards — saved as "${archetype} Deck". Edit below or tap Done!`);
         }
       } else {
         setError('No cards found for this archetype.');

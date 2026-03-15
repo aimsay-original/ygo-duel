@@ -1,1 +1,0 @@
-{"urls":["stun:stun.cloudflare.com:3478","turn:turn.cloudflare.com:3478?transport=udp","turn:turn.cloudflare.com:3478?transport=tcp","turns:turn.cloudflare.com:5349?transport=tcp"],"username":"g0732050a77ecb8e63fb861303b044c91386eca9fc0a0c35fd21af73f1c3980e","credential":"409d935fd0a653c1981cbda460a1367c82acaf4efd6a27e2707a6fb3712bc94c"}

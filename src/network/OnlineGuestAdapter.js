@@ -1,6 +1,6 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
-import { getPeerConfig, SIGNALING_TIMEOUT, CONNECTION_TIMEOUT } from './peerConfig';
+import { PEER_CONFIG, SIGNALING_TIMEOUT } from './peerConfig';
 
 export class OnlineGuestAdapter extends NetworkAdapter {
   constructor(hostPeerId, playerName) {
@@ -8,42 +8,17 @@ export class OnlineGuestAdapter extends NetworkAdapter {
     this.hostPeerId = hostPeerId;
     this.playerName = playerName;
     this.conn = null;
-    this._reconnectAttempts = 0;
-    this._maxReconnect = 10;
-    this._reconnectTimer = null;
     this._signalingTimer = null;
-    this._connectionTimer = null;
     this._destroyed = false;
     this._connected = false;
-    this.peer = null;
-
-    this._fire('connection-stage', 'Loading connection config...');
-
-    // Async init: fetch TURN creds then create Peer
-    this._init();
-  }
-
-  async _init() {
-    if (this._destroyed) return;
-
-    let config;
-    try {
-      config = await getPeerConfig();
-    } catch (e) {
-      console.warn('getPeerConfig failed, using defaults:', e);
-      config = { debug: 0, serialization: 'json', config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
-    }
-
-    if (this._destroyed) return;
+    this._dataChannelOpen = false;
 
     this._fire('connection-stage', 'Connecting to server...');
 
-    this.peer = new Peer(null, config);
+    this.peer = new Peer(null, PEER_CONFIG);
 
-    // Timeout: if signaling server doesn't respond within SIGNALING_TIMEOUT
     this._signalingTimer = setTimeout(() => {
       if (!this._destroyed && !this.peer.open) {
-        console.error('PeerJS signaling server timeout');
         this._fire('error-msg', 'Could not reach game server. Check your internet connection and try again.');
         this.destroy();
       }
@@ -51,14 +26,22 @@ export class OnlineGuestAdapter extends NetworkAdapter {
 
     this.peer.on('open', () => {
       clearTimeout(this._signalingTimer);
-      this._fire('connection-stage', 'Finding room...');
-      this._connectToHost(false);
+      this._fire('connection-stage', 'Joining room...');
+
+      // Set up signaling relay listener
+      this._setupSignalingRelay();
+
+      // Initiate WebRTC connection (triggers host's peer.on('connection'))
+      // Also attempts DataChannel as an optional low-latency upgrade
+      this._connectToHost();
+
+      // Send join message via signaling relay immediately
+      // This is the PRIMARY connection method — works through all NAT/firewalls
+      this._sendViaRelay('set-name', { name: this.playerName });
     });
 
     this.peer.on('error', (err) => {
       clearTimeout(this._signalingTimer);
-      clearTimeout(this._connectionTimer);
-      console.error('Peer error:', err);
       if (err.type === 'peer-unavailable') {
         this._fire('error-msg', 'Room not found. Check the code and try again.');
       } else if (err.type === 'network') {
@@ -66,15 +49,14 @@ export class OnlineGuestAdapter extends NetworkAdapter {
       } else if (err.type === 'server-error') {
         this._fire('error-msg', 'Game server is temporarily unavailable. Try again in a moment.');
       } else {
-        this._fire('error-msg', 'Connection error: ' + (err.type || err.message || 'unknown'));
+        // Don't show errors for WebRTC failures — relay handles connectivity
+        console.warn('PeerJS error (non-fatal):', err.type, err.message);
       }
     });
 
     this.peer.on('disconnected', () => {
       if (!this._destroyed) {
-        try { this.peer.reconnect(); } catch (e) {
-          console.error('Reconnect failed:', e);
-        }
+        try { this.peer.reconnect(); } catch (e) {}
       }
     });
 
@@ -85,35 +67,67 @@ export class OnlineGuestAdapter extends NetworkAdapter {
     });
   }
 
-  _connectToHost(isReconnect) {
-    if (this._destroyed) return;
-    if (this.conn) { try { this.conn.close(); } catch(e) {} }
+  // ─── Signaling Relay ───────────────────────────────────
+  // Routes game data through PeerJS's signaling server (0.peerjs.com)
+  // This is the PRIMARY data path — works through all NAT/firewalls.
 
-    this._fire('connection-stage', isReconnect ? 'Reconnecting...' : 'Joining room...');
+  _setupSignalingRelay() {
+    const ws = this.peer?.socket?._socket;
+    if (!ws) return;
+
+    ws.addEventListener('message', (event) => {
+      if (this._destroyed) return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type !== 'RELAY' || !msg.payload) return;
+        if (msg.src !== this.hostPeerId) return;
+
+        const { event: evt, data } = msg.payload;
+
+        // Host confirmed our connection via relay
+        if (evt === 'relay-connected' && !this._connected) {
+          this._connected = true;
+          this._fire('connected', {});
+          this._fire('connection-status', { status: 'connected' });
+          this._fire('connection-stage', 'Connected!');
+          return;
+        }
+
+        // Regular game messages from host
+        this._fire(evt, data);
+      } catch {}
+    });
+  }
+
+  _sendViaRelay(event, data) {
+    if (this._destroyed) return;
+    try {
+      this.peer.socket.send({
+        type: 'RELAY',
+        dst: this.hostPeerId,
+        payload: { event, data }
+      });
+    } catch (e) {
+      console.warn('Relay send failed:', e);
+    }
+  }
+
+  // ─── DataChannel (optional P2P upgrade) ────────────────
+
+  _connectToHost() {
+    if (this._destroyed) return;
 
     this.conn = this.peer.connect(this.hostPeerId, { reliable: true });
 
-    // Timeout: if data channel doesn't open within CONNECTION_TIMEOUT
-    this._connectionTimer = setTimeout(() => {
-      if (!this._destroyed && !this._connected) {
-        console.error('Data channel connection timeout');
-        this._fire('error-msg', 'Could not connect to host. The room may have closed, or your network may be blocking the connection. Try again.');
-        this.destroy();
-      }
-    }, CONNECTION_TIMEOUT);
-
     this.conn.on('open', () => {
-      clearTimeout(this._connectionTimer);
-      this._connected = true;
-      this._reconnectAttempts = 0;
-      if (isReconnect) {
-        this.conn.send({ event: 'reconnect', data: { name: this.playerName } });
-      } else {
+      this._dataChannelOpen = true;
+      if (!this._connected) {
+        this._connected = true;
         this.conn.send({ event: 'set-name', data: { name: this.playerName } });
+        this._fire('connected', {});
+        this._fire('connection-status', { status: 'connected' });
+        this._fire('connection-stage', 'Connected!');
       }
-      this._fire('connected', {});
-      this._fire('connection-status', { status: 'connected' });
-      this._fire('connection-stage', 'Connected!');
     });
 
     this.conn.on('data', (msg) => {
@@ -121,48 +135,33 @@ export class OnlineGuestAdapter extends NetworkAdapter {
     });
 
     this.conn.on('error', (err) => {
-      clearTimeout(this._connectionTimer);
-      console.error('Data connection error:', err);
-      if (!this._connected) {
-        this._fire('error-msg', 'Failed to connect to room. Try again.');
-      }
+      console.warn('DataChannel error (non-fatal, relay active):', err);
     });
 
     this.conn.on('close', () => {
-      this._connected = false;
-      this._fire('connection-status', { status: 'disconnected' });
-      this._attemptReconnect();
+      this._dataChannelOpen = false;
     });
-  }
 
-  _attemptReconnect() {
-    if (this._destroyed || this._reconnectAttempts >= this._maxReconnect) {
-      if (this._reconnectAttempts >= this._maxReconnect) {
-        this._fire('error-msg', 'Lost connection to host after multiple attempts.');
-        this._fire('player-disconnected', { playerIndex: 0 });
+    // If neither relay nor DataChannel connects within timeout, show error
+    setTimeout(() => {
+      if (!this._destroyed && !this._connected) {
+        this._fire('error-msg', 'Could not connect to host. The room may have closed, or check your connection and try again.');
+        this.destroy();
       }
-      return;
-    }
-    this._reconnectAttempts++;
-    const delay = Math.min(2000 * this._reconnectAttempts, 10000);
-    this._fire('connection-status', { status: 'reconnecting', attempt: this._reconnectAttempts, max: this._maxReconnect });
-    this._fire('connection-stage', `Reconnecting (${this._reconnectAttempts}/${this._maxReconnect})...`);
-    this._reconnectTimer = setTimeout(() => {
-      if (!this._destroyed && this.peer && !this.peer.destroyed) {
-        this._connectToHost(true);
-      }
-    }, delay);
+    }, SIGNALING_TIMEOUT + 5000);
   }
 
   emit(event, data) {
-    if (this.conn && this.conn.open) this.conn.send({ event, data });
+    if (this._dataChannelOpen && this.conn && this.conn.open) {
+      this.conn.send({ event, data });
+    } else {
+      this._sendViaRelay(event, data);
+    }
   }
 
   destroy() {
     this._destroyed = true;
-    clearTimeout(this._reconnectTimer);
     clearTimeout(this._signalingTimer);
-    clearTimeout(this._connectionTimer);
     if (this.peer) {
       try { this.peer.destroy(); } catch (e) {}
     }
