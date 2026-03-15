@@ -1,6 +1,6 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
-import { PEER_CONFIG, SIGNALING_TIMEOUT, CONNECTION_TIMEOUT } from './peerConfig';
+import { getPeerConfig, SIGNALING_TIMEOUT, CONNECTION_TIMEOUT } from './peerConfig';
 
 export class OnlineGuestAdapter extends NetworkAdapter {
   constructor(hostPeerId, playerName) {
@@ -15,10 +15,30 @@ export class OnlineGuestAdapter extends NetworkAdapter {
     this._connectionTimer = null;
     this._destroyed = false;
     this._connected = false;
+    this.peer = null;
+
+    this._fire('connection-stage', 'Loading connection config...');
+
+    // Async init: fetch TURN creds then create Peer
+    this._init();
+  }
+
+  async _init() {
+    if (this._destroyed) return;
+
+    let config;
+    try {
+      config = await getPeerConfig();
+    } catch (e) {
+      console.warn('getPeerConfig failed, using defaults:', e);
+      config = { debug: 0, serialization: 'json', config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
+    }
+
+    if (this._destroyed) return;
 
     this._fire('connection-stage', 'Connecting to server...');
 
-    this.peer = new Peer(null, PEER_CONFIG);
+    this.peer = new Peer(null, config);
 
     // Timeout: if signaling server doesn't respond within SIGNALING_TIMEOUT
     this._signalingTimer = setTimeout(() => {

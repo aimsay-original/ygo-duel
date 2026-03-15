@@ -1,7 +1,7 @@
 import Peer from 'peerjs';
 import { NetworkAdapter } from './NetworkAdapter';
 import { GameEngine } from '../engine/GameEngine';
-import { PEER_CONFIG, SIGNALING_TIMEOUT } from './peerConfig';
+import { getPeerConfig, SIGNALING_TIMEOUT } from './peerConfig';
 
 export class OnlineHostAdapter extends NetworkAdapter {
   constructor(playerName) {
@@ -14,6 +14,7 @@ export class OnlineHostAdapter extends NetworkAdapter {
     this.roomCode = null;
     this._signalingTimer = null;
     this._destroyed = false;
+    this.peer = null;
 
     // Generate a short 6-char room code (no ambiguous chars)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -21,7 +22,24 @@ export class OnlineHostAdapter extends NetworkAdapter {
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     this.roomCode = code;
 
-    this.peer = new Peer('ygoduel-' + code, PEER_CONFIG);
+    // Async init: fetch TURN creds then create Peer
+    this._init(code);
+  }
+
+  async _init(code) {
+    if (this._destroyed) return;
+
+    let config;
+    try {
+      config = await getPeerConfig();
+    } catch (e) {
+      console.warn('getPeerConfig failed, using defaults:', e);
+      config = { debug: 0, serialization: 'json', config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } };
+    }
+
+    if (this._destroyed) return;
+
+    this.peer = new Peer('ygoduel-' + code, config);
 
     // Timeout: if signaling server doesn't respond within SIGNALING_TIMEOUT
     this._signalingTimer = setTimeout(() => {
