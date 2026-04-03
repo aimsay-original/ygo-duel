@@ -167,6 +167,7 @@ export default function DuelField({ gameState }) {
     setSelectedHandCard(index);
     const card = gs.me.hand[index];
     const actions = [];
+    actions.push({ label: 'View Card', action: () => { setPreviewCard(card); setCardActionMenu(null); } });
     const isMonster = card.type && (card.type.toLowerCase().includes('monster') || card.atk !== undefined);
     const isSpell = card.type && card.type.toLowerCase().includes('spell');
     const isTrap = card.type && card.type.toLowerCase().includes('trap');
@@ -269,6 +270,7 @@ export default function DuelField({ gameState }) {
 
     const card = gs.me[zone][index]; if (!card) return;
     const actions = [];
+    if (!card.facedown && !card.hidden) actions.push({ label: 'View Card', action: () => { setPreviewCard(card); setCardActionMenu(null); } });
     if (zone === 'monsters') {
       const inMainPhase = gs.phase === 'main1' || gs.phase === 'main2';
       const canChangePos = isMyTurn && inMainPhase && !card.summonedThisTurn && !card.hasChangedPosition;
@@ -312,6 +314,8 @@ export default function DuelField({ gameState }) {
           handleZoneClick(zone, index, true);
           return;
         }
+        // Tap opponent's face-up card to preview it
+        if (card && !card.hidden) { setPreviewCard(card); haptic(10); }
         return;
       }
       handleZoneClick(zone, index);
