@@ -288,8 +288,24 @@ export default function DeckBuilder({ onDeckReady, playerName }) {
           </div>
 
           {/* Preset Decks Section */}
-          <div className="preset-section-title">Preset Decks</div>
-          <div style={{padding:'0 10px 5px',color:'#666',fontSize:'12px'}}>Tap to auto-load cards into your deck</div>
+          <div className="preset-section-title">Deck Library</div>
+          <div style={{padding:'0 10px 5px',color:'#666',fontSize:'12px'}}>Your saved decks and preset archetypes — tap to load</div>
+          {savedDecks.map(d => (
+            <div key={'saved-'+d.name} className="preset-item saved-preset">
+              <div style={{flex:1}} onClick={() => loadSavedDeck(d)}>
+                <h4>{d.name} <span style={{fontSize:'11px',color:'#4fc3f7',fontWeight:400}}>saved</span></h4>
+                <p>{d.mainCount || d.mainDeckIds?.length || 0} main + {d.extraCount || d.extraDeckIds?.length || 0} extra</p>
+              </div>
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                <button className="saved-deck-btn share" onClick={(e) => { e.stopPropagation(); handleShareDeck(d); }} style={{fontSize:'11px',padding:'4px 8px'}}>
+                  {copied === d.name ? '✓' : 'Share'}
+                </button>
+                <button className="saved-deck-btn delete" onClick={(e) => { e.stopPropagation(); handleDeleteDeck(d.name); }} style={{fontSize:'14px',padding:'4px 8px'}}>
+                  &times;
+                </button>
+              </div>
+            </div>
+          ))}
           {PRESETS.map(p => (
             <div key={p.archetype} className="preset-item" onClick={()=>loadPreset(p.archetype)}>
               <h4>{p.name}</h4>

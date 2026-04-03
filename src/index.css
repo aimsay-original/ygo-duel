@@ -2,7 +2,7 @@
 html, body {
   height: 100%; width: 100%; overflow: hidden;
   font-family: 'Rajdhani', sans-serif;
-  background: #0b0e17;
+  background: #080f0a;
   color: #e0e0e0;
   touch-action: manipulation;
   -webkit-user-select: none; user-select: none;
@@ -72,7 +72,7 @@ html, body {
 .lobby {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   height: 100%; padding: 20px;
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0a0a1a 100%);
+  background: linear-gradient(135deg, #080f0a 0%, #0f2214 50%, #080f0a 100%);
   overflow-y: auto;
 }
 .lobby-title {
@@ -158,7 +158,7 @@ html, body {
 
 .deck-builder {
   display: flex; flex-direction: column; height: 100%;
-  background: #0b0e17;
+  background: #080f0a;
 }
 .db-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -244,12 +244,14 @@ html, body {
   cursor: pointer; transition: all 0.15s;
 }
 .preset-item:active { background: rgba(255,215,0,0.1); border-color: rgba(255,215,0,0.3); }
+.preset-item.saved-preset { display: flex; align-items: center; border-color: rgba(79,195,247,0.2); background: rgba(79,195,247,0.05); }
+.preset-item.saved-preset:active { background: rgba(79,195,247,0.12); border-color: rgba(79,195,247,0.4); }
 .preset-item h4 { color: #ffd700; font-size: 15px; margin-bottom: 4px; }
 .preset-item p { color: #888; font-size: 12px; }
 
 .duel-screen {
   display: flex; flex-direction: column; height: 100%;
-  background: linear-gradient(180deg, #0f1923 0%, #121c2b 35%, #151f30 65%, #121828 100%);
+  background: linear-gradient(180deg, #0a1810 0%, #0e2215 35%, #0c1e18 65%, #08140e 100%);
   background-size: cover; background-position: center; background-repeat: no-repeat;
   position: relative;
   transition: background-color 0.5s ease;
