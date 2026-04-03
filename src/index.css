@@ -2,7 +2,7 @@
 html, body {
   height: 100%; width: 100%; overflow: hidden;
   font-family: 'Rajdhani', sans-serif;
-  background: #0a0a1a;
+  background: #0b0e17;
   color: #e0e0e0;
   touch-action: manipulation;
   -webkit-user-select: none; user-select: none;
@@ -158,7 +158,7 @@ html, body {
 
 .deck-builder {
   display: flex; flex-direction: column; height: 100%;
-  background: #0a0a1a;
+  background: #0b0e17;
 }
 .db-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -249,7 +249,7 @@ html, body {
 
 .duel-screen {
   display: flex; flex-direction: column; height: 100%;
-  background: linear-gradient(180deg, #14231a 0%, #111d2a 30%, #221430 70%, #141225 100%);
+  background: linear-gradient(180deg, #0f1923 0%, #121c2b 35%, #151f30 65%, #121828 100%);
   background-size: cover; background-position: center; background-repeat: no-repeat;
   position: relative;
   transition: background-color 0.5s ease;
@@ -264,8 +264,8 @@ html, body {
 .duel-phase-bar { display: flex; gap: 3px; }
 .phase-pip {
   padding: 5px 8px; font-size: 11px; font-weight: 600;
-  border-radius: 4px; cursor: pointer; color: #666;
-  background: rgba(255,255,255,0.05); transition: all 0.2s;
+  border-radius: 4px; cursor: pointer; color: #5a7a9a;
+  background: rgba(79,195,247,0.05); transition: all 0.2s;
   min-width: 32px; min-height: 28px;
   display: flex; align-items: center; justify-content: center;
 }
@@ -280,8 +280,8 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 12px; min-height: 40px;
 }
-.player-info.opponent { background: rgba(255,0,0,0.05); }
-.player-info.me { background: rgba(0,100,255,0.05); }
+.player-info.opponent { background: rgba(255,50,50,0.07); }
+.player-info.me { background: rgba(40,120,255,0.07); }
 .pi-name { font-size: 13px; font-weight: 600; color: #ccc; }
 .pi-name.active-player { color: #ffd700; }
 .pi-lp {
@@ -319,8 +319,8 @@ html, body {
 .card-zone.highlight { border-color: #ffd700; box-shadow: 0 0 8px rgba(255,215,0,0.4); }
 .card-zone.tribute-target { border-color: #f44336; box-shadow: 0 0 8px rgba(244,67,54,0.4); }
 .phase-pip.past { opacity: 0.3; cursor: default; }
-.card-zone.monster-zone { background: rgba(139,69,19,0.1); }
-.card-zone.spell-zone { background: rgba(0,128,128,0.1); }
+.card-zone.monster-zone { background: rgba(160,100,50,0.08); }
+.card-zone.spell-zone { background: rgba(60,140,200,0.08); }
 .card-zone img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
 .card-zone .def-indicator {
   position: absolute; bottom: 1px; right: 1px;
@@ -397,7 +397,7 @@ html, body {
 .action-btn:active { transform: scale(0.92); }
 .action-btn.draw { background: rgba(76,175,80,0.3); color: #4caf50; }
 .action-btn.end-turn { background: rgba(244,67,54,0.3); color: #f44336; }
-.action-btn.tools { background: rgba(255,255,255,0.1); color: #aaa; }
+.action-btn.tools { background: rgba(79,195,247,0.1); color: #4fc3f7; }
 .action-btn.disabled { opacity: 0.3; pointer-events: none; }
 .modal-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -760,4 +760,24 @@ html, body {
   color: #ffd700; font-size: 13px; font-weight: 600;
   animation: pulse 1.5s infinite;
   pointer-events: none; white-space: nowrap;
+}
+
+/* ── Desktop Hover Card Preview ── */
+.card-hover-preview { display: none; }
+@media (pointer: fine) {
+  .card-hover-preview {
+    display: flex; position: fixed; z-index: 73;
+    background: rgba(20,20,40,0.97); border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 12px; padding: 12px; gap: 12px;
+    max-width: 320px; width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+    pointer-events: none; animation: fadeIn 0.15s ease;
+  }
+  .chp-img { width: 100px; min-width: 100px; border-radius: 6px; object-fit: contain; align-self: flex-start; }
+  .chp-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .chp-name { font-size: 14px; font-weight: 700; color: #ffd700; word-wrap: break-word; }
+  .chp-type { font-size: 11px; color: #aaa; }
+  .chp-attr { font-size: 11px; color: #888; }
+  .chp-stats { font-size: 13px; font-weight: 600; color: #ff8c00; }
+  .chp-desc { font-size: 11px; color: #ccc; line-height: 1.4; max-height: 120px; overflow-y: auto; padding-right: 4px; }
 }

@@ -163,7 +163,7 @@ export class GameEngine {
     else if (data.from.zone === 'hand') { card = s.hand[data.from.index]; s.hand.splice(data.from.index, 1); }
     if (!card) return { error: 'No card to move' };
     const n = this.playerNames[pi];
-    if (data.to.zone === 'graveyard') { s.graveyard.push(card); this.game.log.push(`${n} sent ${card.name} to GY.`); }
+    if (data.to.zone === 'graveyard') { s.graveyard.push(card); this.game.log.push(data.reason === 'discard' ? `${n} discarded ${card.name}.` : `${n} sent ${card.name} to GY.`); }
     else if (data.to.zone === 'banished') { s.banished.push(card); this.game.log.push(`${n} banished ${card.name}.`); }
     else if (data.to.zone === 'hand') { s.hand.push(card); this.game.log.push(`${n} returned ${card.name} to hand.`); }
     else if (data.to.zone === 'deck') { s.deck.push(card); s.deck = shuffleArray(s.deck); this.game.log.push(`${n} shuffled ${card.name} into deck.`); }

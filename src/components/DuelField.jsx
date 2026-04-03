@@ -26,10 +26,12 @@ export default function DuelField({ gameState }) {
   const [previewCard, setPreviewCard] = useState(null);
   const [confirmRequest, setConfirmRequest] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(false);
+  const [hoverCard, setHoverCard] = useState(null);
   const prevLp = useRef({});
   const prevLogLen = useRef(0);
   const longPressTimer = useRef(null);
   const didLongPress = useRef(false);
+  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches;
   const gs = gameState;
   const isMyTurn = gs && gs.currentPlayer === gs.myIndex;
 
@@ -148,11 +150,18 @@ export default function DuelField({ gameState }) {
   const cancelLongPress = () => {
     clearTimeout(longPressTimer.current);
   };
+  const handleCardHover = (card, e) => {
+    if (!isDesktop || !card || card.hidden) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoverCard({ card, x: rect.left + rect.width / 2, rectRight: rect.right, rectLeft: rect.left, y: rect.top + rect.height / 2 });
+  };
+  const handleCardHoverLeave = () => { setHoverCard(null); };
   const lpClass = lp => lp > 4000 ? 'high' : lp > 2000 ? 'mid' : 'low';
   const oppIndex = 1 - gs.myIndex;
 
   const handleHandCardTap = (index) => {
     if (didLongPress.current) { didLongPress.current = false; return; }
+    setHoverCard(null);
     if (tributeMode) return;
     if (selectedHandCard === index) { setSelectedHandCard(null); setPlacingCard(null); return; }
     setSelectedHandCard(index);
@@ -203,6 +212,7 @@ export default function DuelField({ gameState }) {
       if (card.race === 'Field') actions.push({ label: 'Activate (Field)', action: () => { socketRef.current.emit('play-card', { handIndex: index, zone: 'fieldSpell', zoneIndex: 0 }); closeMenus(); } });
     }
     if (isTrap) actions.push({ label: 'Set', action: () => { setPlacingCard({ handIndex: index, zoneType: 'spells', position: 'facedown' }); setCardActionMenu(null); } });
+    actions.push({ label: 'Discard', action: () => { socketRef.current.emit('move-card', { from: { zone: 'hand', index }, to: { zone: 'graveyard' }, reason: 'discard' }); closeMenus(); } });
     actions.push({ label: 'Send to GY', action: () => { socketRef.current.emit('move-card', { from: { zone: 'hand', index }, to: { zone: 'graveyard' } }); closeMenus(); } });
     actions.push({ label: 'Banish', action: () => { socketRef.current.emit('move-card', { from: { zone: 'hand', index }, to: { zone: 'banished' } }); closeMenus(); } });
     setCardActionMenu({ card, actions });
@@ -210,6 +220,7 @@ export default function DuelField({ gameState }) {
 
   const handleZoneClick = (zone, index, isOpponentZone = false) => {
     if (didLongPress.current) { didLongPress.current = false; return; }
+    setHoverCard(null);
 
     // ===== TRIBUTE SELECTION MODE =====
     if (tributeMode && zone === 'monsters' && !isOpponentZone) {
@@ -306,14 +317,23 @@ export default function DuelField({ gameState }) {
       handleZoneClick(zone, index);
     };
 
-    // Long-press props for card preview
-    const lpProps = (c) => (!c || c.hidden) ? {} : {
-      onTouchStart: () => startLongPress(c),
-      onTouchEnd: cancelLongPress,
-      onTouchMove: cancelLongPress,
-      onMouseDown: () => startLongPress(c),
-      onMouseUp: cancelLongPress,
-      onMouseLeave: cancelLongPress
+    // Long-press + hover props for card preview
+    const lpProps = (c) => {
+      if (!c || c.hidden) return {};
+      const base = {
+        onTouchStart: () => startLongPress(c),
+        onTouchEnd: cancelLongPress,
+        onTouchMove: cancelLongPress,
+        onMouseDown: () => startLongPress(c),
+        onMouseUp: cancelLongPress,
+      };
+      if (isDesktop) {
+        base.onMouseEnter = (e) => handleCardHover(c, e);
+        base.onMouseLeave = () => { cancelLongPress(); handleCardHoverLeave(); };
+      } else {
+        base.onMouseLeave = cancelLongPress;
+      }
+      return base;
     };
 
     if (!card) return <div key={`${zone}-${index}`} className={`card-zone ${zone==='monsters'?'monster-zone':'spell-zone'} ${(placingCard&&placingCard.zoneType===zone)?'highlight':''}`} style={oppPlaceStyle} onClick={()=>{
@@ -423,7 +443,9 @@ export default function DuelField({ gameState }) {
       <div className="hand-area">
         {gs.me.hand.map((card,i) => <div key={i} className={`hand-card ${selectedHandCard===i?'selected':''}`} onClick={()=>handleHandCardTap(i)}
           onTouchStart={()=>startLongPress(card)} onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress}
-          onMouseDown={()=>startLongPress(card)} onMouseUp={cancelLongPress} onMouseLeave={cancelLongPress}
+          onMouseDown={()=>startLongPress(card)} onMouseUp={cancelLongPress}
+          onMouseLeave={()=>{ cancelLongPress(); handleCardHoverLeave(); }}
+          {...(isDesktop ? { onMouseEnter: (e) => handleCardHover(card, e) } : {})}
         ><img src={cardImg(card)} alt={card.name} /></div>)}
       </div>
 
@@ -604,6 +626,30 @@ export default function DuelField({ gameState }) {
       {logToast && !showLog && <div className="log-toast">{logToast}</div>}
 
       {connBanner && <div className={`conn-banner ${connBanner.status}`}>{connBanner.text}</div>}
+
+      {/* ─── Desktop Hover Card Preview ─── */}
+      {hoverCard && (
+        <div className="card-hover-preview" style={{
+          [hoverCard.x > window.innerWidth / 2 ? 'right' : 'left']:
+            hoverCard.x > window.innerWidth / 2
+              ? (window.innerWidth - hoverCard.rectLeft + 12) + 'px'
+              : (hoverCard.rectRight + 12) + 'px',
+          top: Math.max(10, Math.min(hoverCard.y - 120, window.innerHeight - 320)) + 'px'
+        }}>
+          <img src={cardImg(hoverCard.card)} alt={hoverCard.card.name || '?'} className="chp-img" />
+          <div className="chp-info">
+            <div className="chp-name">{hoverCard.card.name}</div>
+            {hoverCard.card.type && <div className="chp-type">{hoverCard.card.type}</div>}
+            {hoverCard.card.attribute && <div className="chp-attr">
+              {hoverCard.card.attribute}{hoverCard.card.level ? ` ${'★'.repeat(hoverCard.card.level)}` : ''}
+            </div>}
+            {hoverCard.card.atk !== undefined && (
+              <div className="chp-stats">ATK {hoverCard.card.atk} / DEF {hoverCard.card.def}</div>
+            )}
+            {hoverCard.card.desc && <div className="chp-desc">{hoverCard.card.desc}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
